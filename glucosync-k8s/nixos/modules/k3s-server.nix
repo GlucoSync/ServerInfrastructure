@@ -38,20 +38,11 @@
     after = [ "network-online.target" "firewall.service" ];
     wants = [ "network-online.target" ];
 
-    # Environment variables
     environment = {
       K3S_KUBECONFIG_MODE = "644";
     };
 
-    # Service configuration
     serviceConfig = {
-      # Increase limits for Kubernetes
-      LimitNOFILE = "1048576";
-      LimitNPROC = "infinity";
-      LimitCORE = "infinity";
-      TasksMax = "infinity";
-
-      # Restart policy
       Restart = "always";
       RestartSec = "5s";
     };
