@@ -231,40 +231,6 @@
     };
   };
 
-  # File integrity monitoring with AIDE
-  services.aide = {
-    enable = true;
-    settings = ''
-      # Directories to monitor
-      /etc p+i+n+u+g+s+b+m+c+md5+sha256
-      /bin p+i+n+u+g+s+b+m+c+md5+sha256
-      /sbin p+i+n+u+g+s+b+m+c+md5+sha256
-      /usr/bin p+i+n+u+g+s+b+m+c+md5+sha256
-      /usr/sbin p+i+n+u+g+s+b+m+c+md5+sha256
-      /boot p+i+n+u+g+s+b+m+c+md5+sha256
-
-      # SSH configurations
-      /root/.ssh p+i+n+u+g+s+b+m+c+md5+sha256
-      /home/afonso/.ssh p+i+n+u+g+s+b+m+c+md5+sha256
-    '';
-  };
-
-  # Automated AIDE checks
-  systemd.services.aide-check = {
-    description = "AIDE file integrity check";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.aide}/bin/aide --check";
-    };
-  };
-
-  systemd.timers.aide-check = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "daily";
-      Persistent = true;
-    };
-  };
 
   # System hardening tips logged on login
   environment.interactiveShellInit = ''
