@@ -205,7 +205,6 @@
 
   # Rootkit detection
   environment.systemPackages = with pkgs; [
-    chkrootkit
     lynis # Security auditing tool
   ];
 
