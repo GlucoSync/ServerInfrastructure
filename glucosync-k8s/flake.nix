@@ -35,108 +35,101 @@
           ];
         };
       };
+    } // flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+      in
+      {
+        # Development shell with all tools
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [
+            # Kubernetes tools
+            kubectl
+            kubernetes-helm
+            k9s
+            kubectx
+            kustomize
 
-      # Development shell with all tools
-      devShells = flake-utils.lib.eachDefaultSystem (system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          default = pkgs.mkShell {
-            buildInputs = with pkgs; [
-              # Kubernetes tools
-              kubectl
-              kubernetes-helm
-              k9s
-              kubectx
-              kustomize
+            # GitOps tools
+            argocd
 
-              # GitOps tools
-              argocd
+            # Container tools
+            docker
+            docker-compose
 
-              # Container tools
-              docker
-              docker-compose
+            # Monitoring tools
+            prometheus
+            grafana
 
-              # Monitoring tools
-              prometheus
-              grafana
+            # Backup tools
+            velero
 
-              # Backup tools
-              velero
+            # Network tools
+            curl
+            wget
+            jq
+            yq
 
-              # Network tools
-              curl
-              wget
-              jq
-              yq
+            # Development tools
+            git
+            gnumake
 
-              # Development tools
-              git
-              gnumake
+            # Nix deployment tools
+            nixos-rebuild
 
-              # Nix deployment tools
-              nixos-rebuild
+            # MinIO client
+            minio-client
+          ];
 
-              # MinIO client
-              minio-client
-            ];
+          shellHook = ''
+            echo "🚀 GlucoSync Kubernetes Development Environment"
+            echo "================================================"
+            echo "Available tools:"
+            echo "  - kubectl, helm, k9s, kubectx"
+            echo "  - argocd, velero"
+            echo "  - docker, docker-compose"
+            echo "  - mc (MinIO client)"
+            echo ""
+            echo "Deploy infrastructure:"
+            echo "  nix run .#deploy-control-plane <IP>  # Control plane + HAProxy"
+            echo "  nix run .#deploy-worker <IP>         # Worker node (optional)"
+            echo "  nix run .#deploy-cluster              # Full automated deploy"
+            echo ""
+            echo "Note: Workers are optional. You can run everything on the control plane!"
+          '';
+        };
 
-            shellHook = ''
-              echo "🚀 GlucoSync Kubernetes Development Environment"
-              echo "================================================"
-              echo "Available tools:"
-              echo "  - kubectl, helm, k9s, kubectx"
-              echo "  - argocd, velero"
-              echo "  - docker, docker-compose"
-              echo "  - mc (MinIO client)"
-              echo ""
-              echo "Deploy infrastructure:"
-              echo "  nix run .#deploy-control-plane <IP>  # Control plane + HAProxy"
-              echo "  nix run .#deploy-worker <IP>         # Worker node (optional)"
-              echo "  nix run .#deploy-cluster              # Full automated deploy"
-              echo ""
-              echo "Note: Workers are optional. You can run everything on the control plane!"
-            '';
+        # Apps for easy deployment
+        apps = {
+          # Deploy control plane (includes HAProxy)
+          deploy-control-plane = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "deploy-control-plane" ''
+              set -e
+              echo "🚀 Deploying GlucoSync Control Plane (with HAProxy)..."
+              ${pkgs.nixos-rebuild}/bin/nixos-rebuild switch --flake .#glucosync-control-plane --target-host root@$1 --build-host localhost
+            '');
           };
-        }
-      );
 
-          # Apps for easy deployment
-          apps = flake-utils.lib.eachDefaultSystem (system:
-            let
-              pkgs = nixpkgs.legacyPackages.${system};
-            in
-            {
-              # Deploy control plane (includes HAProxy)
-              deploy-control-plane = {
-                type = "app";
-                program = "${pkgs.writeShellScript "deploy-control-plane" ''
-                  set -e
-                  echo "🚀 Deploying GlucoSync Control Plane (with HAProxy)..."
-                  nixos-rebuild switch --flake .#glucosync-control-plane --target-host root@$1 --build-host localhost
-                ''}";
-              };
+          # Deploy worker (optional)
+          deploy-worker = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "deploy-worker" ''
+              set -e
+              echo "🚀 Deploying GlucoSync Worker Node..."
+              ${pkgs.nixos-rebuild}/bin/nixos-rebuild switch --flake .#glucosync-worker --target-host root@$1 --build-host localhost
+            '');
+          };
 
-              # Deploy worker (optional)
-              deploy-worker = {
-                type = "app";
-                program = "${pkgs.writeShellScript "deploy-worker" ''
-                  set -e
-                  echo "🚀 Deploying GlucoSync Worker Node..."
-                  nixos-rebuild switch --flake .#glucosync-worker --target-host root@$1 --build-host localhost
-                ''}";
-              };
-
-              # Full cluster deployment
-              deploy-cluster = {
-                type = "app";
-                program = "${pkgs.writeShellScript "deploy-cluster" ''
-                  set -e
-                  ${pkgs.bash}/bin/bash ${./scripts/deploy-cluster-nix.sh}
-                ''}";
-              };
-            }
-          );
-    };
+          # Full cluster deployment
+          deploy-cluster = {
+            type = "app";
+            program = toString (pkgs.writeShellScript "deploy-cluster" ''
+              set -e
+              ${pkgs.bash}/bin/bash ${./scripts/deploy-cluster-nix.sh}
+            '');
+          };
+        };
+      }
+    );
 }

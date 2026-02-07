@@ -3,6 +3,11 @@ set -e
 
 # GlucoSync Kubernetes Cluster Deployment Script (Nix-based)
 # This script deploys the entire cluster using NixOS flakes
+#
+# Usage:
+#   ./scripts/deploy-cluster-nix.sh
+#
+# The script will automatically enter the Nix dev shell if needed.
 
 # Colors
 RED='\033[0;31m'
@@ -38,6 +43,16 @@ fi
 if [ ! -f "flake.nix" ]; then
     echo_error "flake.nix not found! Please run this from the glucosync-k8s directory"
     exit 1
+fi
+
+# Check if nixos-rebuild is available
+if ! command -v nixos-rebuild &> /dev/null; then
+    echo_warn "nixos-rebuild not found in PATH"
+    echo_info "Entering Nix development shell with required tools..."
+    echo ""
+    
+    # Re-run script inside nix develop
+    exec nix develop --command bash "$0" "$@"
 fi
 
 # Configuration

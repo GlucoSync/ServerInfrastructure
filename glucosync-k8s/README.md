@@ -19,23 +19,32 @@ Perfect for development, testing, or small deployments. Everything runs on one s
 
 ```bash
 cd glucosync-k8s
-nix develop  # Enter development shell with all tools
 
-# Deploy everything on control plane
+# Run the deployment script (it will auto-enter nix dev shell if needed)
 ./scripts/deploy-cluster-nix.sh
 # When prompted, choose "no" for workers
 ```
 
+**Alternative: Using nix develop explicitly**
+```bash
+cd glucosync-k8s
+nix develop  # Enter development shell with all tools
+
+./scripts/deploy-cluster-nix.sh
+```
+
 #### Option 2: Multi-Node Cluster (Production)
-High availability with separate worker nodes.
+High availability setup with dedicated worker nodes for better resource isolation and scaling.
 
 ```bash
 cd glucosync-k8s
-nix develop
 
-# Deploy with workers
+# Deploy with workers (script auto-enters nix dev shell)
 ./scripts/deploy-cluster-nix.sh
-# When prompted, choose "yes" for workers and provide IPs
+# When prompted:
+# - Enter control plane IP
+# - Choose "yes" for workers
+# - Provide worker IPs (1-3 nodes)
 ```
 
 #### Option 3: Manual Deployment (Advanced)
