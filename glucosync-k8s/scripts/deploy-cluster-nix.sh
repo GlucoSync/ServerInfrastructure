@@ -45,7 +45,6 @@ CONTROL_PLANE_IP=${CONTROL_PLANE_IP:-""}
 WORKER1_IP=${WORKER1_IP:-""}
 WORKER2_IP=${WORKER2_IP:-""}
 WORKER3_IP=${WORKER3_IP:-""}
-HAPROXY_IP=${HAPROXY_IP:-""}
 
 # Interactive mode if IPs not provided
 if [ -z "$CONTROL_PLANE_IP" ]; then
@@ -53,33 +52,37 @@ if [ -z "$CONTROL_PLANE_IP" ]; then
     read CONTROL_PLANE_IP
 fi
 
-if [ -z "$WORKER1_IP" ]; then
-    echo_step "Enter Worker 1 IP address:"
-    read WORKER1_IP
-fi
+echo_step "Do you want to add worker nodes? (yes/no) [no]:"
+read -r ADD_WORKERS
+ADD_WORKERS=${ADD_WORKERS:-no}
 
-if [ -z "$WORKER2_IP" ]; then
-    echo_step "Enter Worker 2 IP address (leave empty to skip):"
-    read WORKER2_IP
-fi
+if [[ "$ADD_WORKERS" == "yes" ]]; then
+    if [ -z "$WORKER1_IP" ]; then
+        echo_step "Enter Worker 1 IP address (leave empty to skip):"
+        read WORKER1_IP
+    fi
 
-if [ -z "$WORKER3_IP" ]; then
-    echo_step "Enter Worker 3 IP address (leave empty to skip):"
-    read WORKER3_IP
-fi
+    if [ -z "$WORKER2_IP" ]; then
+        echo_step "Enter Worker 2 IP address (leave empty to skip):"
+        read WORKER2_IP
+    fi
 
-if [ -z "$HAPROXY_IP" ]; then
-    echo_step "Enter HAProxy IP address:"
-    read HAPROXY_IP
+    if [ -z "$WORKER3_IP" ]; then
+        echo_step "Enter Worker 3 IP address (leave empty to skip):"
+        read WORKER3_IP
+    fi
 fi
 
 echo ""
 echo_info "Cluster Configuration:"
-echo "  Control Plane: $CONTROL_PLANE_IP"
-echo "  Worker 1: $WORKER1_IP"
-[ -n "$WORKER2_IP" ] && echo "  Worker 2: $WORKER2_IP"
-[ -n "$WORKER3_IP" ] && echo "  Worker 3: $WORKER3_IP"
-echo "  HAProxy: $HAPROXY_IP"
+echo "  Control Plane: $CONTROL_PLANE_IP (includes HAProxy)"
+if [[ "$ADD_WORKERS" == "yes" ]]; then
+    [ -n "$WORKER1_IP" ] && echo "  Worker 1: $WORKER1_IP"
+    [ -n "$WORKER2_IP" ] && echo "  Worker 2: $WORKER2_IP"
+    [ -n "$WORKER3_IP" ] && echo "  Worker 3: $WORKER3_IP"
+else
+    echo "  Workers: None (single-node cluster)"
+fi
 echo ""
 
 # Confirm
@@ -111,68 +114,70 @@ K3S_URL="https://$CONTROL_PLANE_IP:6443"
 echo_info "K3S_URL: $K3S_URL"
 echo_info "K3S_TOKEN: [retrieved]"
 
-# Step 2: Deploy Workers
-deploy_worker() {
-    local WORKER_IP=$1
-    local WORKER_NUM=$2
+# Step 2: Deploy Workers (if any)
+if [[ "$ADD_WORKERS" == "yes" ]] && { [ -n "$WORKER1_IP" ] || [ -n "$WORKER2_IP" ] || [ -n "$WORKER3_IP" ]; }; then
+    deploy_worker() {
+        local WORKER_IP=$1
+        local WORKER_NUM=$2
 
-    echo_step "Step 2.$WORKER_NUM: Deploying Worker Node $WORKER_NUM ($WORKER_IP)..."
+        echo_step "Step 2.$WORKER_NUM: Deploying Worker Node $WORKER_NUM ($WORKER_IP)..."
 
-    # Create temporary environment file with K3s connection info
-    ssh root@$WORKER_IP "mkdir -p /etc/rancher/k3s"
-    ssh root@$WORKER_IP "cat > /etc/rancher/k3s/k3s.env <<EOF
+        # Create temporary environment file with K3s connection info
+        ssh root@$WORKER_IP "mkdir -p /etc/rancher/k3s"
+        ssh root@$WORKER_IP "cat > /etc/rancher/k3s/k3s.env <<EOF
 K3S_URL=$K3S_URL
 K3S_TOKEN=$K3S_TOKEN
 EOF"
 
-    # Update worker config with control plane IP
-    TEMP_WORKER_CONFIG=$(mktemp)
-    sed "s/CONTROL_PLANE_IP/$CONTROL_PLANE_IP/g" nixos/modules/k3s-agent.nix > "$TEMP_WORKER_CONFIG"
-    scp "$TEMP_WORKER_CONFIG" "root@$WORKER_IP:/tmp/k3s-agent.nix"
-    ssh root@$WORKER_IP "mkdir -p /etc/nixos/modules && mv /tmp/k3s-agent.nix /etc/nixos/modules/"
-    rm "$TEMP_WORKER_CONFIG"
+        # Update worker config with control plane IP
+        TEMP_WORKER_CONFIG=$(mktemp)
+        sed "s/CONTROL_PLANE_IP/$CONTROL_PLANE_IP/g" nixos/modules/k3s-agent.nix > "$TEMP_WORKER_CONFIG"
+        scp "$TEMP_WORKER_CONFIG" "root@$WORKER_IP:/tmp/k3s-agent.nix"
+        ssh root@$WORKER_IP "mkdir -p /etc/nixos/modules && mv /tmp/k3s-agent.nix /etc/nixos/modules/"
+        rm "$TEMP_WORKER_CONFIG"
 
-    # Deploy NixOS configuration
-    nixos-rebuild switch \
-        --flake .#glucosync-worker \
-        --target-host "root@$WORKER_IP" \
-        --build-host localhost
+        # Deploy NixOS configuration
+        nixos-rebuild switch \
+            --flake .#glucosync-worker \
+            --target-host "root@$WORKER_IP" \
+            --build-host localhost
 
-    echo_info "Worker $WORKER_NUM deployed!"
-}
+        echo_info "Worker $WORKER_NUM deployed!"
+    }
 
-deploy_worker "$WORKER1_IP" 1
-[ -n "$WORKER2_IP" ] && deploy_worker "$WORKER2_IP" 2
-[ -n "$WORKER3_IP" ] && deploy_worker "$WORKER3_IP" 3
+    [ -n "$WORKER1_IP" ] && deploy_worker "$WORKER1_IP" 1
+    [ -n "$WORKER2_IP" ] && deploy_worker "$WORKER2_IP" 2
+    [ -n "$WORKER3_IP" ] && deploy_worker "$WORKER3_IP" 3
 
-echo_info "Waiting for workers to join cluster..."
-sleep 20
+    echo_info "Waiting for workers to join cluster..."
+    sleep 20
+else
+    echo_info "Skipping worker deployment - running as single-node cluster"
+fi
 
 # Step 3: Verify cluster
 echo_step "Step 3: Verifying cluster..."
 ssh root@$CONTROL_PLANE_IP "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml && kubectl get nodes"
 
-# Step 4: Deploy HAProxy
-echo_step "Step 4: Deploying HAProxy Load Balancer..."
-
-# Update HAProxy config with actual IPs
-TEMP_HAPROXY_CONFIG=$(mktemp)
-sed -e "s/WORKER1_IP/$WORKER1_IP/g" \
-    -e "s/WORKER2_IP/$WORKER2_IP/g" \
-    -e "s/WORKER3_IP/$WORKER3_IP/g" \
-    -e "s/CONTROLPLANE_IP/$CONTROL_PLANE_IP/g" \
-    nixos/haproxy.nix > "$TEMP_HAPROXY_CONFIG"
-
-scp "$TEMP_HAPROXY_CONFIG" "root@$HAPROXY_IP:/tmp/haproxy.nix"
-ssh root@$HAPROXY_IP "mkdir -p /etc/nixos && mv /tmp/haproxy.nix /etc/nixos/"
-rm "$TEMP_HAPROXY_CONFIG"
-
-nixos-rebuild switch \
-    --flake .#glucosync-haproxy \
-    --target-host "root@$HAPROXY_IP" \
-    --build-host localhost
-
-echo_info "HAProxy deployed!"
+# Step 4: Configure HAProxy backend (if workers exist)
+if [[ "$ADD_WORKERS" == "yes" ]] && { [ -n "$WORKER1_IP" ] || [ -n "$WORKER2_IP" ] || [ -n "$WORKER3_IP" ]; }; then
+    echo_step "Step 4: Updating HAProxy configuration with worker IPs..."
+    
+    # Create HAProxy backend config snippet
+    HAPROXY_BACKENDS=""
+    [ -n "$WORKER1_IP" ] && HAPROXY_BACKENDS="${HAPROXY_BACKENDS}          server worker1 ${WORKER1_IP}:30443 check\n"
+    [ -n "$WORKER2_IP" ] && HAPROXY_BACKENDS="${HAPROXY_BACKENDS}          server worker2 ${WORKER2_IP}:30443 check\n"
+    [ -n "$WORKER3_IP" ] && HAPROXY_BACKENDS="${HAPROXY_BACKENDS}          server worker3 ${WORKER3_IP}:30443 check\n"
+    
+    # Update HAProxy config on control plane
+    ssh root@$CONTROL_PLANE_IP "sed -i '/# server worker/d' /etc/haproxy.cfg || true"
+    ssh root@$CONTROL_PLANE_IP "sed -i '/server controlplane 127.0.0.1:30443 check/a\\${HAPROXY_BACKENDS}' /etc/haproxy.cfg"
+    ssh root@$CONTROL_PLANE_IP "systemctl reload haproxy"
+    
+    echo_info "HAProxy updated with worker backends!"
+else
+    echo_info "HAProxy configured for single-node operation (localhost only)"
+fi
 
 # Step 5: Install Kubernetes components
 echo_step "Step 5: Installing Kubernetes components..."
@@ -187,20 +192,28 @@ echo_info "║                                                              ║"
 echo_info "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo_info "Cluster Status:"
-echo "  Control Plane: $CONTROL_PLANE_IP"
-echo "  Workers: $(echo $WORKER1_IP $WORKER2_IP $WORKER3_IP | tr -s ' ')"
-echo "  HAProxy: $HAPROXY_IP"
+echo "  Control Plane: $CONTROL_PLANE_IP (includes HAProxy)"
+if [[ "$ADD_WORKERS" == "yes" ]]; then
+    [ -n "$WORKER1_IP" ] && echo "  Worker 1: $WORKER1_IP"
+    [ -n "$WORKER2_IP" ] && echo "  Worker 2: $WORKER2_IP"
+    [ -n "$WORKER3_IP" ] && echo "  Worker 3: $WORKER3_IP"
+else
+    echo "  Mode: Single-node cluster (no workers)"
+fi
 echo ""
 echo_info "Next Steps:"
-echo "  1. Configure DNS to point to $HAPROXY_IP"
+echo "  1. Configure DNS to point to $CONTROL_PLANE_IP"
 echo "  2. Deploy applications: kubectl apply -f k8s/base/applications/"
 echo "  3. Access Grafana: https://grafana.glucosync.io"
 echo "  4. Access ArgoCD: https://argocd.glucosync.io"
+echo "  5. View HAProxy stats: http://$CONTROL_PLANE_IP:8404/stats"
 echo ""
 echo_info "Get ArgoCD admin password:"
 echo "  ssh root@$CONTROL_PLANE_IP 'kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath=\"{.data.password}\" | base64 -d'"
 echo ""
 echo_info "SSH into nodes:"
 echo "  ssh afonso@$CONTROL_PLANE_IP"
-echo "  ssh afonso@$WORKER1_IP"
+if [[ "$ADD_WORKERS" == "yes" ]]; then
+    [ -n "$WORKER1_IP" ] && echo "  ssh afonso@$WORKER1_IP"
+fi
 echo ""

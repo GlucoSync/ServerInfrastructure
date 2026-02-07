@@ -1,41 +1,73 @@
 # GlucoSync Kubernetes Infrastructure
 
-Production-grade, multi-server Kubernetes infrastructure for GlucoSync diabetes management platform with zero-downtime deployments, high availability, and comprehensive observability.
+Production-grade Kubernetes infrastructure for GlucoSync diabetes management platform with zero-downtime deployments, high availability, and comprehensive observability.
 
-## 🚀 Quick Start
+## 🚀 Quick Start (NixOS)
 
 ### Prerequisites
-- 3-4 servers (1 control plane + 2-3 workers)
-- Ubuntu 22.04 LTS or Debian 12
-- 8 CPU cores, 16GB RAM, 500GB SSD per node
-- Root or sudo access
+- 1-4 servers (1 control plane + 0-3 optional workers)
+- NixOS 23.11+ or ability to install Nix
+- 8 CPU cores, 16GB RAM, 500GB SSD per node (control plane)
+- 4 CPU cores, 8GB RAM, 200GB SSD per node (workers)
+- Root SSH access to all nodes
 - Cloudflare account (for DNS and SSL)
 
-### One-Command Setup (Control Plane)
+### Deployment Options
+
+#### Option 1: Single-Node Cluster (Simplest)
+Perfect for development, testing, or small deployments. Everything runs on one server.
+
 ```bash
-cd glucosync-k8s/scripts
-sudo ./cluster-setup.sh
-# Select option 9: Full Setup
+cd glucosync-k8s
+nix develop  # Enter development shell with all tools
+
+# Deploy everything on control plane
+./scripts/deploy-cluster-nix.sh
+# When prompted, choose "no" for workers
 ```
 
-This will automatically:
-- Install K3s control plane
-- Create all namespaces
-- Install Longhorn storage
-- Install cert-manager
-- Install Nginx Ingress Controller
-- Install Postgres Operator
-- Create necessary secrets (interactive prompts)
+#### Option 2: Multi-Node Cluster (Production)
+High availability with separate worker nodes.
 
-### Join Worker Nodes
 ```bash
-# On each worker node
-export K3S_URL="https://<CONTROL_PLANE_IP>:6443"
-export K3S_TOKEN="<TOKEN_FROM_CONTROL_PLANE>"
-cd glucosync-k8s/scripts
-sudo ./cluster-setup.sh
-# Select option 2: Install Worker Node
+cd glucosync-k8s
+nix develop
+
+# Deploy with workers
+./scripts/deploy-cluster-nix.sh
+# When prompted, choose "yes" for workers and provide IPs
 ```
+
+#### Option 3: Manual Deployment (Advanced)
+```bash
+# Deploy control plane (includes HAProxy)
+export CONTROL_PLANE_IP="192.168.1.10"
+nixos-rebuild switch \
+    --flake .#glucosync-control-plane \
+    --target-host "root@$CONTROL_PLANE_IP" \
+    --build-host localhost
+
+# Optionally deploy workers
+export WORKER1_IP="192.168.1.11"
+nixos-rebuild switch \
+    --flake .#glucosync-worker \
+    --target-host "root@$WORKER1_IP" \
+    --build-host localhost
+```
+
+### What Gets Deployed
+
+The deployment script automatically:
+- ✅ Installs K3s control plane with embedded HAProxy
+- ✅ Creates all namespaces
+- ✅ Installs Longhorn storage
+- ✅ Installs cert-manager
+- ✅ Installs Nginx Ingress Controller
+- ✅ Installs Postgres Operator
+- ✅ Installs Prometheus & Grafana monitoring
+- ✅ Installs ArgoCD for GitOps
+- ✅ Installs Sealed Secrets
+- ✅ Joins worker nodes (if specified)
 
 ### Deploy Databases
 ```bash
@@ -47,6 +79,29 @@ sudo ./cluster-setup.sh
 kubectl apply -f k8s/base/applications/glucoengine/
 kubectl apply -f k8s/base/applications/mainwebsite/
 kubectl apply -f k8s/base/applications/newclient/
+```
+
+## 🌐 DNS Configuration
+
+### Required DNS Records
+
+Point all DNS records to your **Control Plane IP** (which runs HAProxy):
+
+```
+# A Records (point to Control Plane IP)
+glucosync.io                  A     <CONTROL_PLANE_IP>
+*.glucosync.io                A     <CONTROL_PLANE_IP>
+
+# Or individual records
+api.glucosync.io              A     <CONTROL_PLANE_IP>
+app.glucosync.io              A     <CONTROL_PLANE_IP>
+grafana.glucosync.io          A     <CONTROL_PLANE_IP>
+prometheus.glucosync.io       A     <CONTROL_PLANE_IP>
+argocd.glucosync.io           A     <CONTROL_PLANE_IP>
+git.glucosync.io              A     <CONTROL_PLANE_IP>
+harbor.glucosync.io           A     <CONTROL_PLANE_IP>
+auth.glucosync.io             A     <CONTROL_PLANE_IP>
+mlflow.glucosync.io           A     <CONTROL_PLANE_IP>
 ```
 
 ## 📁 Directory Structure
@@ -93,17 +148,29 @@ glucosync-k8s/
 
 ## 🏗️ Architecture Overview
 
+### Single-Node Mode
 ```
-Internet → Cloudflare DNS → HAProxy (External LB)
-                               ↓
-                    Kubernetes Cluster (K3s)
-                               ↓
-                    Nginx Ingress Controller
-                               ↓
-        ┌──────────────────────┼──────────────────────┐
-        ↓                      ↓                      ↓
-    Worker Node 1         Worker Node 2         Worker Node 3
-    (2-3 replicas of each application/service)
+Internet → Cloudflare DNS → Control Plane Server
+                                ↓
+                          K3s + HAProxy
+                                ↓
+                     Nginx Ingress Controller
+                                ↓
+                    All Applications & Services
+```
+
+### Multi-Node Mode
+```
+Internet → Cloudflare DNS → Control Plane (HAProxy)
+                                ↓
+                     Kubernetes Cluster (K3s)
+                                ↓
+                     Nginx Ingress Controller
+                                ↓
+         ┌──────────────────────┼──────────────────────┐
+         ↓                      ↓                      ↓
+     Worker Node 1         Worker Node 2         Worker Node 3
+     (2-3 replicas of each application/service)
 ```
 
 ### Namespaces
@@ -418,21 +485,23 @@ kubectl edit statefulset redis -n glucosync-data
 
 ### Required DNS Records
 
+Point all DNS records to your **Control Plane IP** (which runs HAProxy):
+
 ```
-# A Records (point to HAProxy IP)
-glucosync.io                  A     <HAPROXY_IP>
-*.glucosync.io                A     <HAPROXY_IP>
+# A Records (point to Control Plane IP)
+glucosync.io                  A     <CONTROL_PLANE_IP>
+*.glucosync.io                A     <CONTROL_PLANE_IP>
 
 # Or individual records
-api.glucosync.io              A     <HAPROXY_IP>
-app.glucosync.io              A     <HAPROXY_IP>
-grafana.glucosync.io          A     <HAPROXY_IP>
-prometheus.glucosync.io       A     <HAPROXY_IP>
-argocd.glucosync.io           A     <HAPROXY_IP>
-git.glucosync.io              A     <HAPROXY_IP>
-harbor.glucosync.io           A     <HAPROXY_IP>
-auth.glucosync.io             A     <HAPROXY_IP>
-mlflow.glucosync.io           A     <HAPROXY_IP>
+api.glucosync.io              A     <CONTROL_PLANE_IP>
+app.glucosync.io              A     <CONTROL_PLANE_IP>
+grafana.glucosync.io          A     <CONTROL_PLANE_IP>
+prometheus.glucosync.io       A     <CONTROL_PLANE_IP>
+argocd.glucosync.io           A     <CONTROL_PLANE_IP>
+git.glucosync.io              A     <CONTROL_PLANE_IP>
+harbor.glucosync.io           A     <CONTROL_PLANE_IP>
+auth.glucosync.io             A     <CONTROL_PLANE_IP>
+mlflow.glucosync.io           A     <CONTROL_PLANE_IP>
 
 # MX Record (for email)
 glucosync.io                  MX    10 mail.glucosync.io
@@ -440,6 +509,55 @@ glucosync.io                  MX    10 mail.glucosync.io
 # TXT Records (email authentication)
 glucosync.io                  TXT   "v=spf1 mx ~all"
 _dmarc.glucosync.io           TXT   "v=DMARC1; p=quarantine; rua=mailto:admin@glucosync.io"
+```
+
+## 💻 NixOS Configuration
+
+### Flake Structure
+```nix
+glucosync-k8s/
+├── flake.nix                          # Main flake definition
+├── nixos/
+│   ├── common.nix                     # Shared config for all nodes
+│   ├── control-plane.nix              # Control plane + HAProxy
+│   ├── worker.nix                     # Worker nodes
+│   ├── hardware-configuration.nix     # Hardware-specific config
+│   └── modules/
+│       ├── k3s-server.nix             # K3s server configuration
+│       ├── k3s-agent.nix              # K3s agent configuration
+│       └── security.nix               # Security hardening
+```
+
+### Development Shell
+The flake provides a development shell with all necessary tools:
+
+```bash
+nix develop
+
+# Available tools:
+# - kubectl, helm, k9s, kubectx, kustomize
+# - argocd, velero
+# - docker, docker-compose
+# - prometheus, grafana
+# - minio-client (mc)
+```
+
+### Updating the Cluster
+
+```bash
+# Update control plane
+nixos-rebuild switch \
+    --flake .#glucosync-control-plane \
+    --target-host "root@<CONTROL_PLANE_IP>" \
+    --build-host localhost
+
+# Update all workers
+for ip in 192.168.1.11 192.168.1.12; do
+    nixos-rebuild switch \
+        --flake .#glucosync-worker \
+        --target-host "root@$ip" \
+        --build-host localhost
+done
 ```
 
 ## 🎯 Migration from Docker Compose

@@ -17,7 +17,7 @@
     {
       # NixOS configurations for different node types
       nixosConfigurations = {
-        # Control plane node
+        # Control plane node (includes HAProxy load balancer)
         glucosync-control-plane = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           modules = sharedModules ++ [
@@ -26,20 +26,12 @@
           ];
         };
 
-        # Worker node
+        # Worker node (optional - for multi-node clusters)
         glucosync-worker = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           modules = sharedModules ++ [
             ./nixos/worker.nix
             ./nixos/modules/k3s-agent.nix
-          ];
-        };
-
-        # HAProxy load balancer node
-        glucosync-haproxy = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          modules = sharedModules ++ [
-            ./nixos/haproxy.nix
           ];
         };
       };
@@ -100,59 +92,51 @@
               echo "  - mc (MinIO client)"
               echo ""
               echo "Deploy infrastructure:"
-              echo "  nix run .#deploy-control-plane"
-              echo "  nix run .#deploy-worker"
-              echo "  nix run .#deploy-haproxy"
+              echo "  nix run .#deploy-control-plane <IP>  # Control plane + HAProxy"
+              echo "  nix run .#deploy-worker <IP>         # Worker node (optional)"
+              echo "  nix run .#deploy-cluster              # Full automated deploy"
+              echo ""
+              echo "Note: Workers are optional. You can run everything on the control plane!"
             '';
           };
         }
       );
 
-      # Apps for easy deployment
-      apps = flake-utils.lib.eachDefaultSystem (system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          # Deploy control plane
-          deploy-control-plane = {
-            type = "app";
-            program = "${pkgs.writeShellScript "deploy-control-plane" ''
-              set -e
-              echo "🚀 Deploying GlucoSync Control Plane..."
-              nixos-rebuild switch --flake .#glucosync-control-plane --target-host root@$1 --build-host localhost
-            ''}";
-          };
+          # Apps for easy deployment
+          apps = flake-utils.lib.eachDefaultSystem (system:
+            let
+              pkgs = nixpkgs.legacyPackages.${system};
+            in
+            {
+              # Deploy control plane (includes HAProxy)
+              deploy-control-plane = {
+                type = "app";
+                program = "${pkgs.writeShellScript "deploy-control-plane" ''
+                  set -e
+                  echo "🚀 Deploying GlucoSync Control Plane (with HAProxy)..."
+                  nixos-rebuild switch --flake .#glucosync-control-plane --target-host root@$1 --build-host localhost
+                ''}";
+              };
 
-          # Deploy worker
-          deploy-worker = {
-            type = "app";
-            program = "${pkgs.writeShellScript "deploy-worker" ''
-              set -e
-              echo "🚀 Deploying GlucoSync Worker Node..."
-              nixos-rebuild switch --flake .#glucosync-worker --target-host root@$1 --build-host localhost
-            ''}";
-          };
+              # Deploy worker (optional)
+              deploy-worker = {
+                type = "app";
+                program = "${pkgs.writeShellScript "deploy-worker" ''
+                  set -e
+                  echo "🚀 Deploying GlucoSync Worker Node..."
+                  nixos-rebuild switch --flake .#glucosync-worker --target-host root@$1 --build-host localhost
+                ''}";
+              };
 
-          # Deploy HAProxy
-          deploy-haproxy = {
-            type = "app";
-            program = "${pkgs.writeShellScript "deploy-haproxy" ''
-              set -e
-              echo "🚀 Deploying HAProxy Load Balancer..."
-              nixos-rebuild switch --flake .#glucosync-haproxy --target-host root@$1 --build-host localhost
-            ''}";
-          };
-
-          # Full cluster deployment
-          deploy-cluster = {
-            type = "app";
-            program = "${pkgs.writeShellScript "deploy-cluster" ''
-              set -e
-              ${pkgs.bash}/bin/bash ${./scripts/deploy-cluster-nix.sh}
-            ''}";
-          };
-        }
-      );
+              # Full cluster deployment
+              deploy-cluster = {
+                type = "app";
+                program = "${pkgs.writeShellScript "deploy-cluster" ''
+                  set -e
+                  ${pkgs.bash}/bin/bash ${./scripts/deploy-cluster-nix.sh}
+                ''}";
+              };
+            }
+          );
     };
 }

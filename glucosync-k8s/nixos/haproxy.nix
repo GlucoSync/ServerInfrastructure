@@ -1,5 +1,11 @@
 { config, pkgs, lib, ... }:
 
+# ⚠️  DEPRECATED: This standalone HAProxy configuration is no longer used.
+# HAProxy is now integrated into the control plane configuration.
+# See: ./control-plane.nix
+#
+# This file is kept for reference only.
+
 {
   imports = [
     ./hardware-configuration.nix
