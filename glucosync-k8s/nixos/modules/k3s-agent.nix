@@ -32,7 +32,10 @@
   networking.firewall = {
     allowedTCPPorts = [
       10250  # Kubelet API
-      30000-32767  # NodePort range
+    ];
+
+    allowedTCPPortRanges = [
+      { from = 30000; to = 32767; }  # NodePort range
     ];
 
     allowedUDPPorts = [
