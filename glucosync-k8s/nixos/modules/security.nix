@@ -185,10 +185,6 @@
         echo "Listening ports:"
         ${pkgs.nettools}/bin/netstat -tuln
 
-        # Check for rootkits (if installed)
-        if command -v rkhunter &> /dev/null; then
-          rkhunter --check --skip-keypress
-        fi
       ''}";
     };
   };
@@ -209,7 +205,6 @@
 
   # Rootkit detection
   environment.systemPackages = with pkgs; [
-    rkhunter
     chkrootkit
     lynis # Security auditing tool
   ];
