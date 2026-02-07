@@ -1,0 +1,38 @@
+# Secrets (DO NOT COMMIT)
+*.secret
+*.key
+*.pem
+*-credentials.yaml
+secrets/
+
+# Backups
+backups/
+*.gz
+*.tar
+*.zip
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Terraform (if used)
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Ansible (if used)
+*.retry

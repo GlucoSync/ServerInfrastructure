@@ -1,0 +1,107 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mainwebsite
+  namespace: glucosync-core
+  labels:
+    app: mainwebsite
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: mainwebsite
+  template:
+    metadata:
+      labels:
+        app: mainwebsite
+    spec:
+      containers:
+        - name: mainwebsite
+          image: harbor.glucosync.io/glucosync/mainwebsite:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 101
+      imagePullSecrets:
+        - name: harbor-registry-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mainwebsite
+  namespace: glucosync-core
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: mainwebsite
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mainwebsite
+  namespace: glucosync-core
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - glucosync.io
+        - www.glucosync.io
+      secretName: mainwebsite-tls
+  rules:
+    - host: glucosync.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mainwebsite
+                port:
+                  number: 80
+    - host: www.glucosync.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mainwebsite
+                port:
+                  number: 80

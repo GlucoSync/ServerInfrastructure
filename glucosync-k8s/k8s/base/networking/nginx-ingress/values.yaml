@@ -1,0 +1,86 @@
+# Nginx Ingress Controller Configuration
+controller:
+  replicaCount: 3
+
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - ingress-nginx
+          topologyKey: kubernetes.io/hostname
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  service:
+    type: NodePort
+    nodePorts:
+      http: 30080
+      https: 30443
+    externalTrafficPolicy: Local
+
+  config:
+    # Performance tuning
+    worker-processes: "auto"
+    max-worker-connections: "16384"
+
+    # Security headers
+    ssl-protocols: "TLSv1.2 TLSv1.3"
+    ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+    ssl-prefer-server-ciphers: "true"
+
+    # Timeouts
+    proxy-connect-timeout: "60"
+    proxy-send-timeout: "60"
+    proxy-read-timeout: "60"
+
+    # Rate limiting
+    limit-req-status-code: "429"
+
+    # Real IP
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+
+    # Buffer sizes
+    proxy-buffer-size: "16k"
+    proxy-buffers-number: "4"
+
+    # Enable Prometheus metrics
+    enable-opentracing: "true"
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: glucosync-monitoring
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+defaultBackend:
+  enabled: true
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 20Mi
+    limits:
+      cpu: 50m
+      memory: 40Mi

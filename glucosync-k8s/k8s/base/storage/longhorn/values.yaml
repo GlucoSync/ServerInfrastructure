@@ -1,0 +1,38 @@
+# Longhorn storage configuration for high availability
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 3
+  defaultDataLocality: best-effort
+  reclaimPolicy: Retain
+
+defaultSettings:
+  backupTarget: s3://longhorn-backups@minio/
+  backupTargetCredentialSecret: minio-backup-secret
+  createDefaultDiskLabeledNodes: true
+  defaultReplicaCount: 3
+  guaranteedEngineManagerCPU: 12
+  guaranteedReplicaManagerCPU: 12
+  storageMinimalAvailablePercentage: 15
+  upgradeChecker: true
+  defaultLonghornStaticStorageClass: longhorn-static
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  host: longhorn.glucosync.io
+  tls: true
+  tlsSecret: longhorn-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: longhorn-basic-auth
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+enablePSP: false

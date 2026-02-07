@@ -1,0 +1,21 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glucoengine
+spec:
+  replicas: 2  # Staging uses fewer replicas
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mainwebsite
+spec:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newclient
+spec:
+  replicas: 1

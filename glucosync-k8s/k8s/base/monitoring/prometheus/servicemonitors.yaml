@@ -1,0 +1,91 @@
+---
+# ServiceMonitor for GlucoEngine
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: glucoengine
+  namespace: glucosync-core
+  labels:
+    monitoring: glucosync
+spec:
+  selector:
+    matchLabels:
+      app: glucoengine
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+# ServiceMonitor for MongoDB
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mongodb
+  namespace: glucosync-data
+  labels:
+    monitoring: glucosync
+spec:
+  selector:
+    matchLabels:
+      app: mongodb
+  endpoints:
+    - port: metrics
+      interval: 30s
+---
+# ServiceMonitor for Redis
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis
+  namespace: glucosync-data
+  labels:
+    monitoring: glucosync
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  endpoints:
+    - port: metrics
+      interval: 30s
+---
+# ServiceMonitor for Nginx Ingress
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nginx-ingress
+  namespace: ingress-nginx
+  labels:
+    monitoring: glucosync
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+  endpoints:
+    - port: metrics
+      interval: 30s
+---
+# ServiceMonitor for Kubernetes API Server
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kube-apiserver
+  namespace: glucosync-monitoring
+  labels:
+    monitoring: glucosync
+spec:
+  endpoints:
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      port: https
+      scheme: https
+      tlsConfig:
+        caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        serverName: kubernetes
+  jobLabel: component
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      component: apiserver
+      provider: kubernetes

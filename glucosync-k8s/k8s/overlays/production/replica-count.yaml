@@ -1,0 +1,21 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glucoengine
+spec:
+  replicas: 5  # Production starts with 5 replicas
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mainwebsite
+spec:
+  replicas: 3  # Production has more traffic
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newclient
+spec:
+  replicas: 3  # Production has more traffic

@@ -1,0 +1,120 @@
+{
+  "dashboard": {
+    "title": "GlucoSync - GlucoEngine API Metrics",
+    "tags": ["glucosync", "api", "backend"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{job=\"glucoengine\"}[5m])) by (method, endpoint)",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{job=\"glucoengine\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"glucoengine\"}[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Response Time (p95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"glucoengine\"}[5m])) by (le, endpoint))",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Active WebSocket Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "glucosync_active_websocket_connections"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Database Query Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mongodb_query_duration_seconds_sum[5m]) / rate(mongodb_query_duration_seconds_count[5m])",
+            "legendFormat": "Avg Query Time"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Cache Hit Ratio",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "sum(redis_keyspace_hits_total) / (sum(redis_keyspace_hits_total) + sum(redis_keyspace_misses_total)) * 100"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "ML Predictions per Minute",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(glucosync_ml_predictions_total[1m])) * 60"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "OpenAI API Calls",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(glucosync_openai_api_calls_total[5m])) by (model)",
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Pod CPU/Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"glucoengine-.*\"}[5m])) by (pod)",
+            "legendFormat": "CPU {{pod}}"
+          },
+          {
+            "expr": "sum(container_memory_working_set_bytes{pod=~\"glucoengine-.*\"}) by (pod) / 1024 / 1024 / 1024",
+            "legendFormat": "Memory {{pod}} (GB)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      }
+    ],
+    "refresh": "10s",
+    "time": {"from": "now-1h", "to": "now"}
+  }
+}

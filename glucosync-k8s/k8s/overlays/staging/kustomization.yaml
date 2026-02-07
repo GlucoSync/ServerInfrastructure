@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: glucosync-core
+
+# Base configurations
+bases:
+  - ../../base/namespaces
+  - ../../base/applications/glucoengine
+  - ../../base/applications/mainwebsite
+  - ../../base/applications/newclient
+
+# Staging-specific patches
+patchesStrategicMerge:
+  - replica-count.yaml
+
+# Staging images (could use different registry or tags)
+images:
+  - name: harbor.glucosync.io/glucosync/glucoengine
+    newTag: staging
+  - name: harbor.glucosync.io/glucosync/mainwebsite
+    newTag: staging
+  - name: harbor.glucosync.io/glucosync/newclient
+    newTag: staging
+
+# Common labels
+commonLabels:
+  environment: staging
+  managed-by: argocd
+
+# Namespace suffix for staging
+nameSuffix: -staging

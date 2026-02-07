@@ -1,0 +1,119 @@
+# Harbor Container Registry Helm Values
+expose:
+  type: ingress
+  tls:
+    enabled: true
+    certSource: secret
+    secret:
+      secretName: harbor-tls
+  ingress:
+    hosts:
+      core: harbor.glucosync.io
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-production
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+
+externalURL: https://harbor.glucosync.io
+
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  persistentVolumeClaim:
+    registry:
+      storageClass: longhorn
+      size: 100Gi
+    chartmuseum:
+      storageClass: longhorn
+      size: 5Gi
+    jobservice:
+      storageClass: longhorn
+      size: 1Gi
+    database:
+      storageClass: longhorn
+      size: 5Gi
+    redis:
+      storageClass: longhorn
+      size: 1Gi
+    trivy:
+      storageClass: longhorn
+      size: 5Gi
+
+# Use external PostgreSQL
+database:
+  type: external
+  external:
+    host: "harbor-postgres.glucosync-data.svc.cluster.local"
+    port: "5432"
+    username: "harbor"
+    password: "CHANGE_ME"
+    coreDatabase: "registry"
+
+# Use external Redis
+redis:
+  type: external
+  external:
+    addr: "redis-client.glucosync-data.svc.cluster.local:6379"
+    password: "CHANGE_ME"
+
+# Trivy scanner
+trivy:
+  enabled: true
+  gitHubToken: ""
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# Core service
+core:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# Registry service
+registry:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# Portal (UI)
+portal:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ChartMuseum (Helm charts)
+chartmuseum:
+  enabled: true
+  replicas: 1
+
+# Notary (image signing)
+notary:
+  enabled: true
+
+# Metrics
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true

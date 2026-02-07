@@ -1,0 +1,75 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: glucosync-data
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: mongodb-backup
+              image: mongo:7.0
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_FILE="/backup/mongodb-backup-${TIMESTAMP}.gz"
+
+                  echo "Starting MongoDB backup at ${TIMESTAMP}"
+
+                  mongodump \
+                    --uri="mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb-client.glucosync-data.svc.cluster.local:27017/?authSource=admin&replicaSet=rs0" \
+                    --gzip \
+                    --archive="${BACKUP_FILE}"
+
+                  echo "Backup completed: ${BACKUP_FILE}"
+
+                  # Upload to MinIO
+                  mc alias set minio http://minio-api.glucosync-data.svc.cluster.local:9000 ${MINIO_ACCESS_KEY} ${MINIO_SECRET_KEY}
+                  mc cp "${BACKUP_FILE}" minio/mongodb-backups/
+
+                  echo "Backup uploaded to MinIO"
+
+                  # Clean up local backup
+                  rm "${BACKUP_FILE}"
+
+                  # Delete backups older than 30 days from MinIO
+                  mc rm --recursive --force --older-than 30d minio/mongodb-backups/
+
+                  echo "Backup process completed successfully"
+              env:
+                - name: MONGO_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-credentials
+                      key: root-username
+                - name: MONGO_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-credentials
+                      key: root-password
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-credentials
+                      key: root-user
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-credentials
+                      key: root-password
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+          volumes:
+            - name: backup
+              emptyDir: {}

@@ -1,0 +1,156 @@
+---
+# Install ArgoCD first with:
+# kubectl create namespace argocd
+# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: glucoengine
+  namespace: argocd
+spec:
+  project: glucosync
+  source:
+    repoURL: https://git.glucosync.io/glucosync/k8s-manifests.git
+    targetRevision: main
+    path: applications/glucoengine
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: glucosync-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mainwebsite
+  namespace: argocd
+spec:
+  project: glucosync
+  source:
+    repoURL: https://git.glucosync.io/glucosync/k8s-manifests.git
+    targetRevision: main
+    path: applications/mainwebsite
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: glucosync-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: newclient
+  namespace: argocd
+spec:
+  project: glucosync
+  source:
+    repoURL: https://git.glucosync.io/glucosync/k8s-manifests.git
+    targetRevision: main
+    path: applications/newclient
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: glucosync-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: databases
+  namespace: argocd
+spec:
+  project: glucosync
+  source:
+    repoURL: https://git.glucosync.io/glucosync/k8s-manifests.git
+    targetRevision: main
+    path: databases
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: glucosync-data
+  syncPolicy:
+    automated:
+      prune: false  # Don't auto-delete databases
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: glucosync
+  source:
+    repoURL: https://git.glucosync.io/glucosync/k8s-manifests.git
+    targetRevision: main
+    path: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: glucosync-monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: glucosync
+  namespace: argocd
+spec:
+  description: GlucoSync Platform
+  sourceRepos:
+    - 'https://git.glucosync.io/glucosync/*'
+  destinations:
+    - namespace: 'glucosync-*'
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - argocd.glucosync.io
+      secretName: argocd-tls
+  rules:
+    - host: argocd.glucosync.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 443

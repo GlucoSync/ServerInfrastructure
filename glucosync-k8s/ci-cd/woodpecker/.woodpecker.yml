@@ -1,0 +1,134 @@
+# Woodpecker CI Pipeline for GlucoEngine
+
+pipeline:
+  # Restore cache
+  restore-cache:
+    image: meltwater/drone-cache:dev
+    settings:
+      backend: "s3"
+      restore: true
+      cache_key: "{{ .Commit.Branch }}-{{ checksum \"package-lock.json\" }}"
+      archive_format: "gzip"
+      mount:
+        - node_modules
+      endpoint:
+        from_secret: minio_endpoint
+      access_key:
+        from_secret: minio_access_key
+      secret_key:
+        from_secret: minio_secret_key
+
+  # Install dependencies
+  install:
+    image: node:20-alpine
+    commands:
+      - npm ci
+
+  # Lint code
+  lint:
+    image: node:20-alpine
+    commands:
+      - npm run lint
+
+  # Run tests
+  test:
+    image: node:20-alpine
+    commands:
+      - npm run test
+    environment:
+      NODE_ENV: test
+
+  # Build application
+  build:
+    image: node:20-alpine
+    commands:
+      - npm run build
+
+  # Build Docker image
+  docker-build:
+    image: plugins/docker
+    settings:
+      registry: harbor.glucosync.io
+      repo: harbor.glucosync.io/glucosync/glucoengine
+      tags:
+        - latest
+        - ${CI_COMMIT_SHA:0:8}
+        - ${CI_COMMIT_BRANCH}
+      username:
+        from_secret: harbor_username
+      password:
+        from_secret: harbor_password
+      dockerfile: docker/glucoengine/Dockerfile
+    when:
+      branch: main
+
+  # Scan image for vulnerabilities
+  trivy-scan:
+    image: aquasec/trivy:latest
+    commands:
+      - trivy image --severity HIGH,CRITICAL --exit-code 1 harbor.glucosync.io/glucosync/glucoengine:${CI_COMMIT_SHA:0:8}
+    when:
+      branch: main
+
+  # Update GitOps repository
+  update-gitops:
+    image: alpine/git
+    commands:
+      - git clone https://$GITEA_USERNAME:$GITEA_PASSWORD@git.glucosync.io/glucosync/k8s-manifests.git
+      - cd k8s-manifests
+      - sed -i "s|image: harbor.glucosync.io/glucosync/glucoengine:.*|image: harbor.glucosync.io/glucosync/glucoengine:${CI_COMMIT_SHA:0:8}|g" applications/glucoengine/deployment.yaml
+      - git config user.email "ci@glucosync.io"
+      - git config user.name "Woodpecker CI"
+      - git add .
+      - git commit -m "Update glucoengine image to ${CI_COMMIT_SHA:0:8}" || true
+      - git push
+    secrets:
+      - gitea_username
+      - gitea_password
+    when:
+      branch: main
+
+  # Save cache
+  save-cache:
+    image: meltwater/drone-cache:dev
+    settings:
+      backend: "s3"
+      rebuild: true
+      cache_key: "{{ .Commit.Branch }}-{{ checksum \"package-lock.json\" }}"
+      archive_format: "gzip"
+      mount:
+        - node_modules
+      endpoint:
+        from_secret: minio_endpoint
+      access_key:
+        from_secret: minio_access_key
+      secret_key:
+        from_secret: minio_secret_key
+
+  # Notify on Slack
+  slack-notify:
+    image: plugins/slack
+    settings:
+      webhook:
+        from_secret: slack_webhook
+      channel: glucosync-ci
+      template: >
+        {{#success build.status}}
+          ✅ Build #{{build.number}} succeeded for {{repo.name}}
+          Branch: {{build.branch}}
+          Commit: {{build.commit}}
+          Author: {{build.author}}
+        {{else}}
+          ❌ Build #{{build.number}} failed for {{repo.name}}
+          Branch: {{build.branch}}
+          Commit: {{build.commit}}
+          Author: {{build.author}}
+        {{/success}}
+    when:
+      status:
+        - success
+        - failure
+
+# Branch-specific settings
+branches:
+  exclude: [feature/*, hotfix/*]

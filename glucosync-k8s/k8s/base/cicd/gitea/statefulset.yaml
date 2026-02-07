@@ -1,0 +1,175 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitea-config
+  namespace: glucosync-cicd
+data:
+  app.ini: |
+    APP_NAME = GlucoSync Git Server
+    RUN_MODE = prod
+    RUN_USER = git
+
+    [server]
+    PROTOCOL = http
+    DOMAIN = git.glucosync.io
+    ROOT_URL = https://git.glucosync.io/
+    HTTP_PORT = 3000
+    DISABLE_SSH = false
+    SSH_DOMAIN = git.glucosync.io
+    SSH_PORT = 22
+    LFS_START_SERVER = true
+
+    [database]
+    DB_TYPE = postgres
+    HOST = gitea-postgres.glucosync-data.svc.cluster.local:5432
+    NAME = gitea
+    USER = gitea
+    PASSWD =
+    SSL_MODE = disable
+
+    [security]
+    INSTALL_LOCK = true
+    SECRET_KEY = CHANGE_ME_SECRET_KEY
+    INTERNAL_TOKEN = CHANGE_ME_INTERNAL_TOKEN
+
+    [service]
+    DISABLE_REGISTRATION = true
+    REQUIRE_SIGNIN_VIEW = true
+    ENABLE_NOTIFY_MAIL = true
+
+    [mailer]
+    ENABLED = true
+    HOST = mailu-smtp.glucosync-services.svc.cluster.local:587
+    FROM = git@glucosync.io
+    USER = git@glucosync.io
+
+    [session]
+    PROVIDER = redis
+    PROVIDER_CONFIG = redis://redis-client.glucosync-data.svc.cluster.local:6379/0?pool_size=100&idle_timeout=180s
+
+    [cache]
+    ADAPTER = redis
+    HOST = redis://redis-client.glucosync-data.svc.cluster.local:6379/1?pool_size=100&idle_timeout=180s
+
+    [webhook]
+    ALLOWED_HOST_LIST = *
+
+    [oauth2]
+    ENABLE = true
+
+    [openid]
+    ENABLE_OPENID_SIGNIN = true
+    ENABLE_OPENID_SIGNUP = true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gitea
+  namespace: glucosync-cicd
+spec:
+  serviceName: gitea
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.21
+          ports:
+            - containerPort: 3000
+              name: http
+            - containerPort: 22
+              name: ssh
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /data/gitea/conf
+          env:
+            - name: USER_UID
+              value: "1000"
+            - name: USER_GID
+              value: "1000"
+          livenessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 120
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: gitea-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: glucosync-cicd
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+    - port: 22
+      targetPort: 22
+      name: ssh
+  selector:
+    app: gitea
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitea
+  namespace: glucosync-cicd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - git.glucosync.io
+      secretName: gitea-tls
+  rules:
+    - host: git.glucosync.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gitea
+                port:
+                  number: 3000

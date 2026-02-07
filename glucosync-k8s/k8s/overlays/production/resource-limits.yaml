@@ -1,0 +1,17 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glucoengine
+spec:
+  template:
+    spec:
+      containers:
+        - name: glucoengine
+          resources:
+            requests:
+              cpu: 1000m  # Higher for production
+              memory: 2Gi
+            limits:
+              cpu: 3000m
+              memory: 4Gi

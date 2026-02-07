@@ -1,0 +1,128 @@
+---
+# Install Zalando Postgres Operator first with:
+# kubectl apply -k github.com/zalando/postgres-operator/manifests
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: authentik-postgres
+  namespace: glucosync-data
+spec:
+  teamId: "glucosync"
+  volume:
+    size: 20Gi
+    storageClass: longhorn
+  numberOfInstances: 2
+  users:
+    authentik:
+      - superuser
+      - createdb
+  databases:
+    authentik: authentik
+  postgresql:
+    version: "15"
+    parameters:
+      shared_buffers: "256MB"
+      max_connections: "200"
+      work_mem: "16MB"
+      maintenance_work_mem: "128MB"
+      effective_cache_size: "1GB"
+      wal_buffers: "8MB"
+      checkpoint_completion_target: "0.9"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+      log_statement: "mod"
+      log_duration: "on"
+      log_line_prefix: "%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h "
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  patroni:
+    initdb:
+      encoding: "UTF8"
+      locale: "en_US.UTF-8"
+      data-checksums: "true"
+    pg_hba:
+      - hostssl all all 0.0.0.0/0 md5
+      - host all all 0.0.0.0/0 md5
+  enableShmVolume: true
+  enableConnectionPooler: true
+  connectionPooler:
+    numberOfInstances: 2
+    mode: "transaction"
+    schema: "pooler"
+    user: "pooler"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+---
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: mlflow-postgres
+  namespace: glucosync-data
+spec:
+  teamId: "glucosync"
+  volume:
+    size: 10Gi
+    storageClass: longhorn
+  numberOfInstances: 2
+  users:
+    mlflow:
+      - superuser
+      - createdb
+  databases:
+    mlflow: mlflow
+  postgresql:
+    version: "15"
+    parameters:
+      shared_buffers: "128MB"
+      max_connections: "100"
+      work_mem: "8MB"
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  patroni:
+    initdb:
+      encoding: "UTF8"
+      locale: "en_US.UTF-8"
+      data-checksums: "true"
+  enableConnectionPooler: true
+---
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: gitea-postgres
+  namespace: glucosync-data
+spec:
+  teamId: "glucosync"
+  volume:
+    size: 10Gi
+    storageClass: longhorn
+  numberOfInstances: 2
+  users:
+    gitea:
+      - superuser
+      - createdb
+  databases:
+    gitea: gitea
+  postgresql:
+    version: "15"
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
