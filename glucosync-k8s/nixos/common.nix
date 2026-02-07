@@ -169,7 +169,6 @@
     "vm.swappiness" = 10;
     "fs.file-max" = 2097152;
     "net.core.somaxconn" = 32768;
-    "net.ipv4.tcp_max_syn_backlog" = 8192;
   };
 
   # Kernel modules for Kubernetes
