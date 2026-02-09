@@ -525,12 +525,15 @@ install_postgres_operator() {
 create_secrets() {
     echo_info "Creating secrets..."
 
-    # Cloudflare API token
+    # Cloudflare API token (for cert-manager)
     read -sp "Enter Cloudflare API token: " CF_TOKEN
     echo
     kubectl create secret generic cloudflare-api-token \
         --from-literal=api-token=$CF_TOKEN \
+        --namespace=cert-manager \
         --dry-run=client -o yaml | kubectl apply -f -
+    
+    echo_info "Cloudflare secret created in cert-manager namespace"
 
     # MongoDB credentials
     read -sp "Enter MongoDB root password: " MONGO_PASSWORD
