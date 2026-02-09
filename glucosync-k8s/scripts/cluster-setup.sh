@@ -427,12 +427,14 @@ install_longhorn() {
     echo_info "Waiting for Longhorn to be ready..."
     kubectl wait --for=condition=ready pod -l app=longhorn-manager -n longhorn-system --timeout=600s
 
-    # Apply Longhorn configuration if exists
-    if [[ -f "${K8S_BASE_DIR}/storage/longhorn/values.yaml" ]]; then
-        kubectl apply -f "${K8S_BASE_DIR}/storage/longhorn/values.yaml"
+    # Apply Longhorn StorageClass and optional settings
+    if [[ -f "${K8S_BASE_DIR}/storage/longhorn/settings.yaml" ]]; then
+        echo_info "Applying Longhorn StorageClass and settings..."
+        kubectl apply -f "${K8S_BASE_DIR}/storage/longhorn/settings.yaml"
     fi
 
     echo_info "Longhorn installed successfully"
+    echo_info "Access Longhorn UI: kubectl port-forward -n longhorn-system svc/longhorn-frontend 8080:80"
 }
 
 # Function to install cert-manager

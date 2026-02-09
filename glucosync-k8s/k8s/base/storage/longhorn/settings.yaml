@@ -1,0 +1,70 @@
+---
+# Longhorn StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "3"
+  staleReplicaTimeout: "2880"
+  fromBackup: ""
+  fsType: "ext4"
+  dataLocality: "best-effort"
+---
+# Longhorn Settings ConfigMap (optional - apply these manually via UI or kubectl)
+# To apply a setting, use:
+# kubectl -n longhorn-system patch settings.longhorn.io <setting-name> --type=merge -p '{"value":"<new-value>"}'
+#
+# Example settings to configure after installation:
+#
+# Set backup target (MinIO):
+# kubectl -n longhorn-system patch settings.longhorn.io backup-target --type=merge -p '{"value":"s3://longhorn-backups@minio/"}'
+#
+# Set default replica count:
+# kubectl -n longhorn-system patch settings.longhorn.io default-replica-count --type=merge -p '{"value":"3"}'
+#
+# Set storage minimal available percentage:
+# kubectl -n longhorn-system patch settings.longhorn.io storage-minimal-available-percentage --type=merge -p '{"value":"15"}'
+#
+# Enable upgrade checker:
+# kubectl -n longhorn-system patch settings.longhorn.io upgrade-checker --type=merge -p '{"value":"true"}'
+---
+# Longhorn Ingress (optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: longhorn-ingress
+  namespace: longhorn-system
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: longhorn-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Longhorn'
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - longhorn.glucosync.io
+    secretName: longhorn-tls
+  rules:
+  - host: longhorn.glucosync.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: longhorn-frontend
+            port:
+              number: 80
+---
+# Basic Auth Secret for Longhorn UI
+# Create with: htpasswd -c auth admin
+# Then: kubectl -n longhorn-system create secret generic longhorn-basic-auth --from-file=auth
+# Or use: kubectl -n longhorn-system create secret generic longhorn-basic-auth --from-literal=auth='admin:$apr1$...'
