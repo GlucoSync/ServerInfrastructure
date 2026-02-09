@@ -60,7 +60,7 @@ controller:
   metrics:
     enabled: true
     serviceMonitor:
-      enabled: true
+      enabled: false  # Disabled until Prometheus Operator is installed
       namespace: glucosync-monitoring
 
   podDisruptionBudget:
