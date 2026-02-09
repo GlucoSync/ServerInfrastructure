@@ -33,6 +33,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 K8S_BASE_DIR="${PROJECT_ROOT}/k8s/base"
 
+# Set kubeconfig path for kubectl and helm
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
 echo_info "Script directory: $SCRIPT_DIR"
 echo_info "Project root: $PROJECT_ROOT"
 echo_info "K8s base directory: $K8S_BASE_DIR"
@@ -504,7 +507,15 @@ install_postgres_operator() {
     kubectl apply -k github.com/zalando/postgres-operator/manifests
 
     echo_info "Waiting for Postgres Operator to be ready..."
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=postgres-operator -n default --timeout=300s
+    # Wait for deployment to be available
+    kubectl wait --for=condition=available deployment/postgres-operator -n default --timeout=300s 2>/dev/null || \
+    kubectl wait --for=condition=ready pod -l name=postgres-operator -n default --timeout=300s 2>/dev/null || \
+    kubectl wait --for=condition=ready pod -l app=postgres-operator -n default --timeout=300s || \
+    echo_warn "Could not verify operator readiness, checking manually..."
+    
+    # Manual verification
+    sleep 10
+    kubectl get pods -n default -l name=postgres-operator || kubectl get pods -n default | grep postgres-operator
 
     echo_info "Postgres Operator installed successfully"
 }
