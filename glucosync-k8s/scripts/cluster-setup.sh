@@ -89,59 +89,6 @@ APT::Periodic::AutocleanInterval "7";
 APT::Periodic::Unattended-Upgrade "1";
 EOF
 
-    # Configure SSH hardening
-    echo_info "Hardening SSH configuration..."
-    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
-    cat > /etc/ssh/sshd_config << 'EOF'
-# GlucoSync Hardened SSH Configuration
-Port 22
-Protocol 2
-HostKey /etc/ssh/ssh_host_rsa_key
-HostKey /etc/ssh/ssh_host_ecdsa_key
-HostKey /etc/ssh/ssh_host_ed25519_key
-
-# Authentication
-PermitRootLogin prohibit-password
-StrictModes yes
-MaxAuthTries 3
-MaxSessions 10
-PubkeyAuthentication yes
-PasswordAuthentication no
-PermitEmptyPasswords no
-ChallengeResponseAuthentication no
-UsePAM yes
-
-# Security settings
-X11Forwarding no
-PrintMotd no
-PrintLastLog yes
-TCPKeepAlive yes
-PermitUserEnvironment no
-Compression delayed
-ClientAliveInterval 300
-ClientAliveCountMax 2
-UseDNS no
-AllowTcpForwarding no
-AllowAgentForwarding no
-PermitTunnel no
-
-# Logging
-SyslogFacility AUTH
-LogLevel VERBOSE
-
-# Override default of no subsystems
-Subsystem sftp /usr/lib/openssh/sftp-server -f AUTHPRIV -l INFO
-EOF
-
-    # Restart SSH service (handle both sshd and ssh service names)
-    if systemctl list-units --full -all | grep -Fq 'sshd.service'; then
-        systemctl restart sshd
-    elif systemctl list-units --full -all | grep -Fq 'ssh.service'; then
-        systemctl restart ssh
-    else
-        echo_warn "SSH service not found, skipping restart"
-    fi
-
     # Configure fail2ban
     echo_info "Configuring fail2ban..."
     cat > /etc/fail2ban/jail.local << 'EOF'
@@ -186,17 +133,17 @@ EOF
     echo_info "Configuring UFW firewall..."
     ufw --force disable
     ufw --force reset
-    
+
     # Default policies
     ufw default deny incoming
     ufw default allow outgoing
-    
+
     # Allow SSH with rate limiting
     ufw limit ssh/tcp comment 'SSH with rate limiting'
-    
+
     # Allow K3s API server (will be configured per node type)
     # ufw allow 6443/tcp comment 'K3s API server'
-    
+
     # Enable UFW
     ufw --force enable
 
@@ -539,12 +486,12 @@ install_nginx_ingress() {
 # Function to create namespaces
 create_namespaces() {
     echo_info "Creating namespaces..."
-    
+
     if [[ ! -f "${K8S_BASE_DIR}/namespaces/namespaces.yaml" ]]; then
         echo_error "Namespaces file not found at: ${K8S_BASE_DIR}/namespaces/namespaces.yaml"
         exit 1
     fi
-    
+
     kubectl apply -f "${K8S_BASE_DIR}/namespaces/namespaces.yaml"
     echo_info "Namespaces created successfully"
 }
