@@ -133,7 +133,14 @@ LogLevel VERBOSE
 Subsystem sftp /usr/lib/openssh/sftp-server -f AUTHPRIV -l INFO
 EOF
 
-    systemctl restart sshd
+    # Restart SSH service (handle both sshd and ssh service names)
+    if systemctl list-units --full -all | grep -Fq 'sshd.service'; then
+        systemctl restart sshd
+    elif systemctl list-units --full -all | grep -Fq 'ssh.service'; then
+        systemctl restart ssh
+    else
+        echo_warn "SSH service not found, skipping restart"
+    fi
 
     # Configure fail2ban
     echo_info "Configuring fail2ban..."
